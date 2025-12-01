@@ -17,6 +17,8 @@ st.set_page_config(
 # --- CSS ESTILO MODERN GLASS (VIDRO & DEGRADÊ) ---
 st.markdown("""
     <style>
+
+
     /* Fundo Geral com Degradê Moderno */
     .stApp {
         background: linear-gradient(to bottom right, #1a1a1a, #2d3436);
@@ -93,6 +95,7 @@ st.markdown("""
         background-color: #1DB954;
         border-radius: 10px;
     }
+
     </style>
     """, unsafe_allow_html=True)
 
@@ -103,11 +106,11 @@ def load_data():
     # 🧪 DADOS MOCKADOS
     # =========================================================================
     data = {
-        'Musica': ['Bohemian Rhapsody', 'Blinding Lights', 'Shape of You', 'Smells Like You', 'Smells Like Teen Spirit', 'Hotel California', 'Someone Like You', 'Uptown Funk', 'Imagine', 'Bad Guy', 'Despacito', 'Lose Yourself', 'Hallelujah', 'Levitating', 'Rolling in the Deep', 'Sweet Child O\' Mine', 'Wonderwall', 'Thriller', 'Heroes', 'Respect', 'Dancing Queen', 'Numb', 'Enter Sandman', 'Toxic', 'Happy', 'Comfortably Numb', 'Billie Jean', 'Stayin\' Alive', 'I Will Always Love You', 'Gangsta\'s Paradise', 'Shallow', 'Old Town Road', 'Believer', 'Senorita', 'Bad Romance', 'Take on Me'],
+        'Musica': ['Bohemian Rhapsody', 'Blinding Lights', 'Shape of You', 'Smells Like Teen Spirit', 'Hotel California', 'Someone Like You', 'Uptown Funk', 'Imagine', 'Bad Guy', 'Despacito', 'Lose Yourself', 'Hallelujah', 'Levitating', 'Rolling in the Deep', 'Sweet Child O\' Mine', 'Wonderwall', 'Thriller', 'Heroes', 'Respect', 'Dancing Queen', 'Numb', 'Enter Sandman', 'Toxic', 'Happy', 'Comfortably Numb', 'Billie Jean', 'Stayin\' Alive', 'I Will Always Love You', 'Gangsta\'s Paradise', 'Shallow', 'Old Town Road', 'Believer', 'Senorita', 'Bad Romance', 'Take on Me'],
         'Artista': ['Queen', 'The Weeknd', 'Ed Sheeran', 'Nirvana', 'Eagles', 'Adele', 'Mark Ronson', 'John Lennon', 'Billie Eilish', 'Luis Fonsi', 'Eminem', 'Leonard Cohen', 'Dua Lipa', 'Adele', 'Guns N\' Roses', 'Oasis', 'Michael Jackson', 'David Bowie', 'Aretha Franklin', 'ABBA', 'Linkin Park', 'Metallica', 'Britney Spears', 'Pharrell Williams', 'Pink Floyd', 'Michael Jackson', 'Bee Gees', 'Whitney Houston', 'Coolio', 'Lady Gaga', 'Lil Nas X', 'Imagine Dragons', 'Camila Cabello', 'Lady Gaga', 'a-ha'],
         'Genero': ['Rock', 'Pop', 'Pop', 'Rock', 'Rock', 'Pop', 'Funk', 'Classic', 'Pop', 'Latin', 'Hip-Hop', 'Folk', 'Pop', 'Pop', 'Rock', 'Rock', 'Pop', 'Classic', 'R&B', 'Pop', 'Rock', 'Metal', 'Pop', 'Pop', 'Rock', 'Pop', 'Disco', 'R&B', 'Hip-Hop', 'Pop', 'Hip-Hop', 'Rock', 'Latin', 'Pop', 'Pop'],
-        'Dancabilidade': [0.39, 0.51, 0.82, 0.50, 0.58, 0.29, 0.86, 0.30, 0.70, 0.76, 0.69, 0.20, 0.70, 0.40, 0.45, 0.38, 0.77, 0.45, 0.75, 0.78, 0.50, 0.45, 0.79, 0.90, 0.25, 0.85, 0.80, 0.30, 0.75, 0.57, 0.88, 0.77, 0.75, 0.70, 0.57],
-        'Energia':       [0.90, 0.80, 0.70, 0.90, 0.50, 0.30, 0.90, 0.20, 0.40, 0.80, 0.90, 0.10, 0.80, 0.60, 0.90, 0.70, 0.90, 0.60, 0.70, 0.70, 0.95, 0.95, 0.80, 0.80, 0.40, 0.75, 0.75, 0.25, 0.60, 0.38, 0.60, 0.78, 0.70, 0.92, 0.90],
+        'Vibração': [0.39, 0.51, 0.82, 0.50, 0.58, 0.29, 0.86, 0.30, 0.70, 0.76, 0.69, 0.20, 0.70, 0.40, 0.45, 0.38, 0.77, 0.45, 0.75, 0.78, 0.50, 0.45, 0.79, 0.90, 0.25, 0.85, 0.80, 0.30, 0.75, 0.57, 0.88, 0.77, 0.75, 0.70, 0.57],
+        'Humor':         [0.90, 0.80, 0.70, 0.90, 0.50, 0.30, 0.90, 0.20, 0.40, 0.80, 0.90, 0.10, 0.80, 0.60, 0.90, 0.70, 0.90, 0.60, 0.70, 0.70, 0.95, 0.95, 0.80, 0.80, 0.40, 0.75, 0.75, 0.25, 0.60, 0.38, 0.60, 0.78, 0.70, 0.92, 0.90],
         'Vibe':          [0.50, 0.30, 0.80, 0.20, 0.60, 0.20, 0.90, 0.70, 0.30, 0.90, 0.60, 0.10, 0.80, 0.40, 0.60, 0.40, 0.80, 0.50, 0.80, 0.95, 0.20, 0.30, 0.70, 0.95, 0.15, 0.80, 0.90, 0.20, 0.40, 0.30, 0.60, 0.50, 0.55, 0.70, 0.80]
     }
     return pd.DataFrame(data)
@@ -125,10 +128,43 @@ st.markdown("---")
 
 # --- 2. SIDEBAR (Controles) ---
 with st.sidebar:
-    st.header("🎛️ Seu Mix")
-    input_energia = st.slider("⚡ Energia", 0.0, 1.0, 0.6)
-    input_vibe = st.slider("😊 Vibe (Positividade)", 0.0, 1.0, 0.7)
-    input_danca = st.slider("💃 Dancabilidade", 0.0, 1.0, 0.8)
+    st.header("🎶 Seu Mix")
+    humor_choice = st.radio(
+        "⚡ Humor (intensidade emocional)",
+        ["Calmo", "Equilibrado", "Intenso", "Explosivo"],
+        index=2,
+        help="Escolha o nível de energia emocional."
+    )
+    vibe_choice = st.radio(
+        "😊 Vibe (positividade)",
+        ["Melancólico", "Neutro", "Positivo", "Radiante"],
+        index=2,
+        help="Qual o clima geral das faixas?"
+    )
+    mood_choice = st.radio(
+        "🧠 Mood (calmo ↔ eufórico)",
+        ["Chill", "Focus", "Festivo", "Eufórico"],
+        index=2,
+        help="Grau de agitação desejado."
+    )
+    ritmo_choice = st.radio(
+        "🎚️ Ritmo / Groove",
+        ["Suave", "Groove", "Dançante", "Porradão"],
+        index=2,
+        help="Quão marcada deve ser a batida."
+    )
+
+    humor_map = {"Calmo": 0.25, "Equilibrado": 0.5, "Intenso": 0.75, "Explosivo": 0.95}
+    vibe_map = {"Melancólico": 0.2, "Neutro": 0.5, "Positivo": 0.7, "Radiante": 0.9}
+    mood_map = {"Chill": 0.35, "Focus": 0.55, "Festivo": 0.72, "Eufórico": 0.92}
+    ritmo_map = {"Suave": 0.35, "Groove": 0.55, "Dançante": 0.75, "Porradão": 0.92}
+
+    input_humor = humor_map[humor_choice]
+    input_vibe = vibe_map[vibe_choice]
+    input_mood = mood_map[mood_choice]
+    input_ritmo = ritmo_map[ritmo_choice]
+    feature_vibracao = (input_mood + input_ritmo) / 2
+    feature_vibe = input_vibe
     
     st.markdown("---")
     with st.expander("Configurações Avançadas"):
@@ -150,7 +186,7 @@ with tab1:
 
     # Lógica de ML
     k_final = min(n_neighbors, len(df_modelo))
-    X = df_modelo[['Dancabilidade', 'Energia', 'Vibe']].values
+    X = df_modelo[['Vibração', 'Humor', 'Vibe']].values
     scaler = StandardScaler()
     
     if len(X) > 0:
@@ -162,7 +198,7 @@ with tab1:
         st.stop()
 
     if btn_processar:
-        user_vector = np.array([[input_danca, input_energia, input_vibe]])
+        user_vector = np.array([[feature_vibracao, input_humor, feature_vibe]])
         user_vector_scaled = scaler.transform(user_vector)
         distances, indices = model.kneighbors(user_vector_scaled)
         
@@ -197,11 +233,11 @@ with tab1:
         with st.expander("🔍 Ver Comparação Visual (Radar Chart)"):
             top_rec = df_modelo.iloc[indices[0][0]]
             fig = go.Figure()
-            categories = ['Dancabilidade', 'Energia', 'Vibe']
+            categories = ['Mood/Ritmo (média)', 'Humor', 'Vibe']
             
             # Trace do Usuário
             fig.add_trace(go.Scatterpolar(
-                r=[input_danca, input_energia, input_vibe],
+                r=[feature_vibracao, input_humor, feature_vibe],
                 theta=categories,
                 fill='toself',
                 name='Teu Vibe',
@@ -212,7 +248,7 @@ with tab1:
             
             # Trace da Música Recomendada
             fig.add_trace(go.Scatterpolar(
-                r=[top_rec['Dancabilidade'], top_rec['Energia'], top_rec['Vibe']],
+                r=[top_rec['Vibração'], top_rec['Humor'], top_rec['Vibe']],
                 theta=categories,
                 fill='toself',
                 name=f"Top 1: {top_rec['Musica']}",
@@ -274,7 +310,7 @@ with tab2:
         
     with c2:
         st.subheader("Energia vs Vibe")
-        fig_scatter = px.scatter(df, x='Energia', y='Vibe', color='Genero', size='Dancabilidade', hover_data=['Musica'])
+        fig_scatter = px.scatter(df, x='Humor', y='Vibe', color='Genero', size='Vibração', hover_data=['Musica'])
         fig_scatter.update_layout(
             paper_bgcolor='rgba(0,0,0,0)', 
             plot_bgcolor='rgba(255,255,255,0.05)', 
@@ -285,7 +321,7 @@ with tab2:
         st.plotly_chart(fig_scatter, use_container_width=True)
     
     st.subheader("Matriz de Correlação")
-    corr = df[['Dancabilidade', 'Energia', 'Vibe']].corr()
+    corr = df[['Vibração', 'Humor', 'Vibe']].corr()
     fig_corr = px.imshow(corr, text_auto=True, aspect="auto", color_continuous_scale='Greens')
     fig_corr.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color='white')
     st.plotly_chart(fig_corr, use_container_width=True)
