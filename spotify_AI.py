@@ -1,3 +1,8 @@
+import os
+import base64
+from typing import List, Dict, Any, Optional
+
+from dotenv import load_dotenv
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -5,6 +10,9 @@ import plotly.graph_objects as go
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import StandardScaler
 import numpy as np
+import requests
+
+load_dotenv()
 
 # --- CONFIGURACAO DA PAGINA ---
 st.set_page_config(
@@ -111,6 +119,42 @@ def load_data():
 
 df = load_data()
 
+
+# --- 1b. SPOTIFY API HELPERS ---
+def _get_basic_token(client_id: str, client_secret: str) -> Optional[str]:
+    token_url = "https://accounts.spotify.com/api/token"
+    auth_header = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+    headers = {"Authorization": f"Basic {auth_header}"}
+    data = {"grant_type": "client_credentials"}
+    resp = requests.post(token_url, headers=headers, data=data, timeout=10)
+    if resp.status_code != 200:
+        return None
+    return resp.json().get("access_token")
+
+
+def _search_track(query: str, token: str) -> Optional[Dict[str, Any]]:
+    url = "https://api.spotify.com/v1/search"
+    params = {"q": query, "type": "track", "limit": 1}
+    headers = {"Authorization": f"Bearer {token}"}
+    resp = requests.get(url, headers=headers, params=params, timeout=10)
+    if resp.status_code != 200:
+        return None
+    items = resp.json().get("tracks", {}).get("items", [])
+    if not items:
+        return None
+    return items[0]
+
+
+def _recommendations(seed_track_id: str, token: str, limit: int, targets: Dict[str, float]) -> List[Dict[str, Any]]:
+    url = "https://api.spotify.com/v1/recommendations"
+    params = {"seed_tracks": seed_track_id, "limit": limit}
+    params.update(targets)
+    headers = {"Authorization": f"Bearer {token}"}
+    resp = requests.get(url, headers=headers, params=params, timeout=10)
+    if resp.status_code != 200:
+        return []
+    return resp.json().get("tracks", [])
+
 # --- HEADER ---
 col_logo, col_title = st.columns([1, 5])
 with col_logo:
@@ -123,6 +167,16 @@ st.markdown("---")
 # --- 2. SIDEBAR (Controles) ---
 with st.sidebar:
     st.header("🎛️ Seu Mix")
+    st.subheader("Credenciais Spotify")
+    default_client_id = os.getenv("SPOTIFY_CLIENT_ID", "")
+    default_client_secret = os.getenv("SPOTIFY_CLIENT_SECRET", "")
+    client_id = st.text_input("Client ID", value=default_client_id)
+    client_secret = st.text_input("Client Secret", type="password", value=default_client_secret)
+    st.markdown("---")
+    st.subheader("Referencia")
+    ref_track_query = st.text_input("Digite uma musica que voce curta", value="")
+    st.caption("Usaremos essa faixa como semente para recomendar similares via API.")
+    st.markdown("---")
     humor_choice = st.radio(
         "⚡ Humor (intensidade emocional)",
         ["Calmo", "Equilibrado", "Intenso", "Explosivo"],
@@ -136,7 +190,7 @@ with st.sidebar:
         help="Qual o clima geral das faixas?"
     )
     mood_choice = st.radio(
-        "🧠 Humor (calmo ↔ euforico)",
+        "🧠 Humor (calmo <-> euforico)",
         ["Relaxado", "Focado", "Festivo", "Euforico"],
         index=2,
         help="Grau de agitacao desejado."
@@ -166,65 +220,96 @@ with st.sidebar:
         genero_filter = st.multiselect("Filtrar Genero", sorted(df['Genero'].unique()))
     
     st.write("")
-    btn_processar = st.button("🚀 GERAR PLAYLIST", use_container_width=True)
+    btn_processar = st.button("🚀 Buscar no Spotify", use_container_width=True)
 
 # --- 3. ESTRUTURA DE ABAS ---
 tab1, tab2, tab3 = st.tabs(["🎵 Playlist", "📊 Analise de Dados", "ℹ️ Como Funciona"])
 
 # --- TAB 1: PLAYLIST (PRINCIPAL) ---
 with tab1:
+    # fallback dados locais
     if genero_filter:
         df_modelo = df[df['Genero'].isin(genero_filter)].reset_index(drop=True)
     else:
         df_modelo = df
 
     k_final = min(n_neighbors, len(df_modelo))
-    X = df_modelo[['Vibracao', 'Humor', 'Vibe']].values
-    scaler = StandardScaler()
-    
-    if len(X) > 0:
-        X_scaled = scaler.fit_transform(X)
-        model = NearestNeighbors(n_neighbors=k_final, algorithm='brute', metric='euclidean')
-        model.fit(X_scaled)
-    else:
-        st.error("Nenhuma musica com esse filtro.")
-        st.stop()
 
     if btn_processar:
-        user_vector = np.array([[feature_vibracao, input_humor, feature_vibe]])
-        user_vector_scaled = scaler.transform(user_vector)
-        distances, indices = model.kneighbors(user_vector_scaled)
-        
-        st.subheader("🎧 Sua Playlist Personalizada")
-        st.write("")  # espaco
-        
+        if not client_id or not client_secret:
+            st.error("Informe Client ID e Client Secret do Spotify.")
+            st.stop()
+        if not ref_track_query:
+            st.error("Digite uma musica de referencia.")
+            st.stop()
+
+        with st.spinner("Conectando ao Spotify..."):
+            token = _get_basic_token(client_id, client_secret)
+        if not token:
+            st.error("Nao foi possivel autenticar na API do Spotify. Verifique credenciais.")
+            st.stop()
+
+        with st.spinner("Buscando faixa de referencia..."):
+            seed_track = _search_track(ref_track_query, token)
+        if not seed_track:
+            st.error("Nao encontrei essa faixa no Spotify. Tente outro nome.")
+            st.stop()
+
+        seed_id = seed_track["id"]
+        targets = {
+            "target_energy": round(input_humor, 2),
+            "target_valence": round(feature_vibe, 2),
+            "target_danceability": round(feature_vibracao, 2),
+        }
+
+        with st.spinner("Gerando recomendacoes..."):
+            recs = _recommendations(seed_id, token, limit=k_final, targets=targets)
+
+        st.subheader("🎧 Sua Playlist Spotify")
+        st.caption(f"Semente: {seed_track['name']} — {seed_track['artists'][0]['name']}")
+
+        if not recs:
+            st.warning("Nao veio nada da API. Exibindo sugestoes locais.")
+        tracks_to_show = recs if recs else []
+
+        if not tracks_to_show and len(df_modelo) > 0:
+            # fallback ML local
+            X = df_modelo[['Vibracao', 'Humor', 'Vibe']].values
+            scaler = StandardScaler()
+            X_scaled = scaler.fit_transform(X)
+            model = NearestNeighbors(n_neighbors=k_final, algorithm='brute', metric='euclidean')
+            model.fit(X_scaled)
+            user_vector = np.array([[feature_vibracao, input_humor, feature_vibe]])
+            user_vector_scaled = scaler.transform(user_vector)
+            distances, indices = model.kneighbors(user_vector_scaled)
+            for idx in indices[0]:
+                musica = df_modelo.iloc[idx]
+                tracks_to_show.append({
+                    "name": musica["Musica"],
+                    "artists": [{"name": musica["Artista"]}],
+                    "album": {"images": [{"url": f"https://placehold.co/300x300/2b2b2b/1DB954?text={musica['Genero']}"}]},
+                    "match": None,
+                })
+
         cols = st.columns(k_final)
-        
-        for i, idx in enumerate(indices[0]):
-            musica = df_modelo.iloc[idx]
-            match_score = max(0, min(100, (1 - distances[0][i]) * 100))
-            img_url = f"https://placehold.co/300x300/2b2b2b/1DB954?text={musica['Genero']}"
-            
+        for i, track in enumerate(tracks_to_show[:k_final]):
+            name = track["name"]
+            artist = ", ".join([a["name"] for a in track.get("artists", [])])
+            images = track.get("album", {}).get("images", [])
+            cover = images[0]["url"] if images else "https://placehold.co/300x300/2b2b2b/1DB954?text=Spotify"
             if i < len(cols):
                 with cols[i]:
                     st.markdown(f"""
                     <div class="song-card">
-                        <img src="{img_url}" style="width:100%; border-radius:10px; margin-bottom:10px;">
-                        <div style="font-weight:bold; font-size:16px; margin-bottom:5px;">{musica['Musica']}</div>
-                        <div style="color:#b3b3b3; font-size:14px; margin-bottom:10px;">{musica['Artista']}</div>
+                        <img src="{cover}" style="width:100%; border-radius:10px; margin-bottom:10px;">
+                        <div style="font-weight:bold; font-size:16px; margin-bottom:5px;">{name}</div>
+                        <div style="color:#b3b3b3; font-size:14px; margin-bottom:10px;">{artist}</div>
                     </div>
                     """, unsafe_allow_html=True)
-                    
-                    cor_match = "#1DB954" if match_score > 70 else "#f1c40f"
-                    st.markdown(f"<div style='display:flex; justify-content:space-between; font-size:12px;'><span>Match</span><span style='color:{cor_match}'>{int(match_score)}%</span></div>", unsafe_allow_html=True)
-                    st.progress(int(match_score))
-                    
         st.write("---")
         with st.expander("🔍 Ver comparacao visual (radar)"):
-            top_rec = df_modelo.iloc[indices[0][0]]
             fig = go.Figure()
             categories = ['Mood/Ritmo (media)', 'Humor', 'Vibe']
-            
             fig.add_trace(go.Scatterpolar(
                 r=[feature_vibracao, input_humor, feature_vibe],
                 theta=categories,
@@ -234,17 +319,6 @@ with tab1:
                 marker=dict(size=8),
                 fillcolor='rgba(29, 185, 84, 0.3)'
             ))
-            
-            fig.add_trace(go.Scatterpolar(
-                r=[top_rec['Vibracao'], top_rec['Humor'], top_rec['Vibe']],
-                theta=categories,
-                fill='toself',
-                name=f"Top 1: {top_rec['Musica']}",
-                line=dict(color='#ffffff', width=2, dash='dot'),
-                marker=dict(size=6, symbol='diamond'),
-                fillcolor='rgba(255, 255, 255, 0.1)'
-            ))
-            
             fig.update_layout(
                 polar=dict(
                     radialaxis=dict(
@@ -277,7 +351,7 @@ with tab1:
             st.plotly_chart(fig, use_container_width=True)
             
     else:
-        st.info("👈 Ajuste seus gostos na barra lateral e clique em GERAR PLAYLIST.")
+        st.info("👈 Ajuste seus gostos na barra lateral, escolha uma musica de referencia e clique em BUSCAR.")
         st.markdown("### Tendencias no banco de dados")
         st.dataframe(df.sample(5), use_container_width=True)
 
@@ -325,5 +399,11 @@ with tab3:
     1. **Mapeamento:** Cada musica vira coordenadas (X, Y, Z).
     2. **Distancia:** Calculamos a distancia euclidiana entre teu gosto e as faixas disponiveis.
     3. **Normalizacao:** Usamos `StandardScaler` para dar o mesmo peso a todas as variaveis.
+
+    ### Integracao Spotify
+    - Autenticacao: usa Client ID/Secret (app Spotify) via Client Credentials para pegar um token.
+    - Busca: achamos a faixa digitada na busca do Spotify.
+    - Recomendacoes: chamamos `/v1/recommendations` com a faixa como semente e os alvos (energia, valence, danceability) derivados dos controles.
+    - Fallback: se a API falhar, mostramos sugestoes locais do conjunto mockado.
     """)
     st.info("💡 Dica: Experimente mudar os controles radicalmente para ver como a recomendacao muda completamente!")
