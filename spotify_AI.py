@@ -13,11 +13,12 @@ import numpy as np
 import requests
 
 load_dotenv()
+SPOTIFY_MARKET = os.getenv("SPOTIFY_MARKET", "BR")
 
 # --- CONFIGURACAO DA PAGINA ---
 st.set_page_config(
     page_title="Spotify AI",
-    page_icon="🎵",
+    page_icon=":musical_note:",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -132,26 +133,49 @@ def _get_basic_token(client_id: str, client_secret: str) -> Optional[str]:
     return resp.json().get("access_token")
 
 
-def _search_track(query: str, token: str) -> Optional[Dict[str, Any]]:
+def _search_track(query: str, token: str) -> List[Dict[str, Any]]:
+    """Busca faixas e retorna lista (pode ser vazia)."""
     url = "https://api.spotify.com/v1/search"
-    params = {"q": query, "type": "track", "limit": 1}
+    params = {"q": query, "type": "track", "limit": 3, "market": SPOTIFY_MARKET}
     headers = {"Authorization": f"Bearer {token}"}
     resp = requests.get(url, headers=headers, params=params, timeout=10)
     if resp.status_code != 200:
-        return None
+        st.error(f"Erro na busca (HTTP {resp.status_code}): {resp.text}")
+        return []
     items = resp.json().get("tracks", {}).get("items", [])
     if not items:
-        return None
-    return items[0]
+        st.warning("Busca no Spotify nao retornou faixas. Tente outro termo.")
+    return items
 
 
 def _recommendations(seed_track_id: str, token: str, limit: int, targets: Dict[str, float]) -> List[Dict[str, Any]]:
+    """Busca recomendacoes; tenta com market, depois fallback para US, depois sem market."""
     url = "https://api.spotify.com/v1/recommendations"
-    params = {"seed_tracks": seed_track_id, "limit": limit}
-    params.update(targets)
     headers = {"Authorization": f"Bearer {token}"}
-    resp = requests.get(url, headers=headers, params=params, timeout=10)
-    if resp.status_code != 200:
+
+    def _call(market: Optional[str]) -> requests.Response:
+        params = {"seed_tracks": seed_track_id, "limit": max(1, limit)}
+        params.update(targets)
+        if market:
+            params["market"] = market
+        return requests.get(url, headers=headers, params=params, timeout=10)
+
+    attempts = [SPOTIFY_MARKET, "US", None]
+    resp = None
+    for mk in attempts:
+        resp = _call(mk)
+        if resp.status_code == 200:
+            break
+        if resp.status_code in (400, 404):
+            continue
+        else:
+            break
+
+    if resp is None or resp.status_code != 200:
+        st.error(
+            f"Erro ao recomendar (HTTP {resp.status_code}) seed={seed_track_id} "
+            f"market={mk} url={resp.url} body={resp.text}"
+        )
         return []
     return resp.json().get("tracks", [])
 
@@ -166,7 +190,7 @@ st.markdown("---")
 
 # --- 2. SIDEBAR (Controles) ---
 with st.sidebar:
-    st.header("🎛️ Seu Mix")
+    st.header("Seu Mix")
     st.subheader("Credenciais Spotify")
     default_client_id = os.getenv("SPOTIFY_CLIENT_ID", "")
     default_client_secret = os.getenv("SPOTIFY_CLIENT_SECRET", "")
@@ -178,25 +202,25 @@ with st.sidebar:
     st.caption("Usaremos essa faixa como semente para recomendar similares via API.")
     st.markdown("---")
     humor_choice = st.radio(
-        "⚡ Humor (intensidade emocional)",
+        "Humor (intensidade emocional)",
         ["Calmo", "Equilibrado", "Intenso", "Explosivo"],
         index=2,
         help="Escolha o nivel de energia emocional."
     )
     vibe_choice = st.radio(
-        "😊 Vibe (positividade)",
+        "Vibe (positividade)",
         ["Melancolico", "Neutro", "Positivo", "Radiante"],
         index=2,
         help="Qual o clima geral das faixas?"
     )
     mood_choice = st.radio(
-        "🧠 Humor (calmo <-> euforico)",
+        "Humor (calmo <-> euforico)",
         ["Relaxado", "Focado", "Festivo", "Euforico"],
         index=2,
         help="Grau de agitacao desejado."
     )
     ritmo_choice = st.radio(
-        "🎚️ Ritmo / Groove",
+        "Ritmo / Groove",
         ["Suave", "Groove", "Dancante", "Porradao"],
         index=2,
         help="Quao marcada deve ser a batida."
@@ -220,10 +244,10 @@ with st.sidebar:
         genero_filter = st.multiselect("Filtrar Genero", sorted(df['Genero'].unique()))
     
     st.write("")
-    btn_processar = st.button("🚀 Buscar no Spotify", use_container_width=True)
+    btn_processar = st.button("Buscar no Spotify", use_container_width=True)
 
 # --- 3. ESTRUTURA DE ABAS ---
-tab1, tab2, tab3 = st.tabs(["🎵 Playlist", "📊 Analise de Dados", "ℹ️ Como Funciona"])
+tab1, tab2, tab3 = st.tabs(["Playlist", "Analise de Dados", "Como Funciona"])
 
 # --- TAB 1: PLAYLIST (PRINCIPAL) ---
 with tab1:
@@ -236,6 +260,7 @@ with tab1:
     k_final = min(n_neighbors, len(df_modelo))
 
     if btn_processar:
+        st.caption(f"Debug: market={SPOTIFY_MARKET or 'None'}")
         if not client_id or not client_secret:
             st.error("Informe Client ID e Client Secret do Spotify.")
             st.stop()
@@ -250,23 +275,31 @@ with tab1:
             st.stop()
 
         with st.spinner("Buscando faixa de referencia..."):
-            seed_track = _search_track(ref_track_query, token)
-        if not seed_track:
+            seed_tracks = _search_track(ref_track_query, token)
+        if not seed_tracks:
             st.error("Nao encontrei essa faixa no Spotify. Tente outro nome.")
             st.stop()
 
-        seed_id = seed_track["id"]
         targets = {
             "target_energy": round(input_humor, 2),
             "target_valence": round(feature_vibe, 2),
             "target_danceability": round(feature_vibracao, 2),
         }
 
+        recs = []
+        chosen_seed = None
         with st.spinner("Gerando recomendacoes..."):
-            recs = _recommendations(seed_id, token, limit=k_final, targets=targets)
+            for cand in seed_tracks:
+                seed_id = cand["id"]
+                recs = _recommendations(seed_id, token, limit=k_final, targets=targets)
+                if recs:
+                    chosen_seed = cand
+                    break
+        if not chosen_seed:
+            chosen_seed = seed_tracks[0]
 
-        st.subheader("🎧 Sua Playlist Spotify")
-        st.caption(f"Semente: {seed_track['name']} — {seed_track['artists'][0]['name']}")
+        st.subheader("Sua Playlist Spotify")
+        st.caption(f"Semente: {chosen_seed['name']} - {chosen_seed['artists'][0]['name']}")
 
         if not recs:
             st.warning("Nao veio nada da API. Exibindo sugestoes locais.")
@@ -307,7 +340,7 @@ with tab1:
                     </div>
                     """, unsafe_allow_html=True)
         st.write("---")
-        with st.expander("🔍 Ver comparacao visual (radar)"):
+        with st.expander("Ver comparacao visual (radar)"):
             fig = go.Figure()
             categories = ['Mood/Ritmo (media)', 'Humor', 'Vibe']
             fig.add_trace(go.Scatterpolar(
@@ -351,7 +384,7 @@ with tab1:
             st.plotly_chart(fig, use_container_width=True)
             
     else:
-        st.info("👈 Ajuste seus gostos na barra lateral, escolha uma musica de referencia e clique em BUSCAR.")
+        st.info("Ajuste seus gostos na barra lateral, escolha uma musica de referencia e clique em BUSCAR.")
         st.markdown("### Tendencias no banco de dados")
         st.dataframe(df.sample(5), use_container_width=True)
 
@@ -406,4 +439,4 @@ with tab3:
     - Recomendacoes: chamamos `/v1/recommendations` com a faixa como semente e os alvos (energia, valence, danceability) derivados dos controles.
     - Fallback: se a API falhar, mostramos sugestoes locais do conjunto mockado.
     """)
-    st.info("💡 Dica: Experimente mudar os controles radicalmente para ver como a recomendacao muda completamente!")
+    st.info("Dica: Experimente mudar os controles radicalmente para ver como a recomendacao muda completamente!")
